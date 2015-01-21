@@ -1,0 +1,1384 @@
+<?xml version="1.0" encoding="utf-8"?>
+<openerp>
+    <data>
+
+        <!-- Top menu item -->
+        <menuitem name="Project"
+            id="base.menu_main_pm"
+            groups="group_project_manager,group_project_user"
+            sequence="40"/>
+
+        <menuitem id="menu_project_management" name="Project" parent="base.menu_main_pm" sequence="1"/>
+        <menuitem id="base.menu_definitions" name="Configuration" parent="base.menu_main_pm" sequence="60"/>
+
+        <record id="view_task_search_form" model="ir.ui.view">
+            <field name="name">project.task.search.form</field>
+            <field name="model">project.task</field>
+            <field name="arch" type="xml">
+               <search string="Tasks">
+                    <field name="name" string="Tasks"/>
+                    <field name="categ_ids"/>
+                    <separator/>
+                    <filter icon="terp-mail-message-new" string="Unread Messages" name="message_unread" domain="[('message_unread','=',True)]"/>
+                    <separator/>
+                    <filter name="draft" string="New" domain="[('state','=','draft')]" help="New Tasks" icon="terp-check"/>
+                    <filter name="open" string="In Progress" domain="[('state','=','open')]" help="In Progress Tasks" icon="terp-camera_test"/>
+                    <filter string="Pending" domain="[('state','=','pending')]" context="{'show_delegated':False}" help="Pending Tasks" icon="terp-gtk-media-pause"/>
+                    <separator/>
+                    <filter name="My project" string="Project" domain="[('project_id.user_id','=',uid)]" help="My Projects" icon="terp-check"/>
+                    <separator/>
+                    <filter string="My Tasks" domain="[('user_id','=',uid)]"  help="My Tasks" icon="terp-personal"/>
+                    <filter string="Unassigned Tasks" domain="[('user_id','=',False)]"  help="Unassigned Tasks" icon="terp-personal-"/>
+                    <separator/>
+                    <filter string="Deadlines" context="{'deadline_visible': False}" domain="[('date_deadline','&lt;&gt;',False)]"
+                        help="Show only tasks having a deadline" icon="terp-gnome-cpu-frequency-applet+"/>
+                    <field name="project_id"/>
+                    <field name="user_id"/>
+                    <group expand="0" string="Group By...">
+                        <filter string="Users" name="group_user_id" icon="terp-personal" domain="[]"  context="{'group_by':'user_id'}"/>
+                        <filter string="Project" name="group_project_id" icon="terp-folder-violet" domain="[]" context="{'group_by':'project_id'}"/>
+                        <filter string="Stage" name="group_stage_id" icon="terp-stage" domain="[]" context="{'group_by':'stage_id'}"/>
+                        <filter string="Deadline" icon="terp-gnome-cpu-frequency-applet+" domain="[]" context="{'group_by':'date_deadline'}"/>
+                        <filter string="Start Date" icon="terp-go-month" domain="[]" context="{'group_by':'date_start'}" groups="base.group_no_one"/>
+                        <filter string="End Date" icon="terp-go-month" domain="[]" context="{'group_by':'date_end'}" groups="base.group_no_one"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <record id="act_project_project_2_project_task_all" model="ir.actions.act_window">
+            <field name="name">Tasks</field>
+            <field name="res_model">project.task</field>
+            <field name="view_mode">kanban,tree,form,calendar,gantt,graph</field>
+            <field name="context">{'search_default_project_id': [active_id], 'default_project_id': active_id, 'active_test': False}</field>
+            <field name="search_view_id" ref="view_task_search_form"/>
+            <field name="help" type="html">
+              <p class="oe_view_nocontent_create">
+                Click to create a new task.
+              </p><p>
+                OpenERP's project management allows you to manage the pipeline
+                of tasks in order to get things done efficiently. You can
+                track progress, discuss on tasks, attach documents, etc.
+              </p>
+            </field>
+        </record>
+
+        <!-- Project -->
+        <record id="edit_project" model="ir.ui.view">
+            <field name="name">project.project.form</field>
+            <field name="model">project.project</field>
+            <field name="arch" type="xml">
+                <form string="Project" version="7.0">
+                <header>
+                    <button name="set_open" string="Re-open project" type="object" states="pending" class="oe_highlight" groups="base.group_user"/>
+                    <button name="set_done" string="Close Project" type="object" states="open,pending" groups="base.group_user"/>
+                    <button name="set_open" string="Re-open project" type="object" states="cancelled,close" groups="base.group_user"/>
+                    <button name="set_pending" string="Pending" type="object" states="open" groups="base.group_user"/>
+                    <button name="set_template" string="Set as Template" type="object" states="open" groups="base.group_user"/>
+                    <button string="New Project Based on Template" name="duplicate_template"  type="object" states="template" context="{'parent_id':parent_id}" class="oe_highlight" groups="base.group_user"/>
+                    <button name="reset_project" string="Reset as Project" type="object" states="template" class="oe_highlight" groups="base.group_user"/>
+                    <button name="set_cancel" string="Cancel Project" type="object" states="open,pending" groups="base.group_user"/>
+                    <field name="state" widget="statusbar" statusbar_visible="open,close" statusbar_colors='{"pending":"blue"}' readonly="1"/>
+                </header>
+                <sheet string="Project">
+                    <field name="analytic_account_id" invisible="1" required="0"/>
+                    <div class="oe_title">
+                        <label for="name" class="oe_edit_only" string="Project Name"/>
+                        <h1>
+                            <field name="name" string="Project Name"/>
+                        </h1>
+                        <div name="options_active">
+                            <field name="use_tasks" class="oe_inline"/>
+                            <label for="use_tasks"/>
+                        </div>
+                    </div>
+                    <div class="oe_right oe_button_box" name="buttons" groups="base.group_user">
+                        <button name="%(act_project_project_2_project_task_all)d" string="Tasks"
+                            type="action" attrs="{'invisible':[('use_tasks','=', 0)]}"/>
+                        <button name="attachment_tree_view" string="Documents" type="object"/>
+                    </div>
+                    <group>
+                        <group>
+                          <!--  <field name="privacy_visibility"/>-->
+                            <field name="user_id" string="Project Manager" attrs="{'readonly':[('state','in',['close', 'cancelled'])]}"/>
+                            <field name="po_id" />
+			    <field name="responsible_id" />
+				<field name="x_type" string="Type" />
+			     <field name="x_business_type" string="Business Type" />
+			     <field name="x_process_type" string="Process Type" />
+
+                            <field name="x_project_number" string="Project Number" />
+                            <field name="x_SAP" string="SAP Number" />
+			    <field name="x_redmine" string="Redmine Link" />
+
+                           
+
+                        </group>
+
+                        <group string="Customer Fields">
+                            <field name="partner_id" required="1" on_change="onchange_partner_id(partner_id)"/>
+                            
+                        </group>
+
+                         <group string="Status">
+                  
+                                                                                                       
+                            <field name="stage" />  
+                            <field name="milestone" />
+                            <field name="phase" />
+                            <field name="project_status" />                                                                                     
+                            <field name="x_hold"/>
+                            <field name="x_projoect_description" string="Description" />
+                            <field name="x_notes" string="Notes" />
+                            <field name="x_customer_duration" />
+                            <field name="x_actual_duration" />
+                            <field name="x_engineering_estimate" />
+                            
+                            <field name="x_project_lifecycle" />
+                            
+                        </group>
+                        </group>
+
+                          <notebook>
+                         <page string="Dates" >
+                <group>
+                        <group string="Dates">
+                          <field name="x_enquiry_date" string="Enquiry Date" />
+                          <field name="x_prd_initial_date" string="PRD Initiation Date" />
+                          <field name="x_prd_complete" string="PRD Complete Date" />
+                          <field name="x_expected_award_date" string="Expected Award Date" />
+                          <field name="x_actual_award_date" string="Actual Award Date" attrs="{'required':[('project_status', '=', 'Award')]}"/>
+                          <field name="x_checklist_complete" string="Checklist Complete Date" />
+                          <field name="x_target_mp" string="Target MP Date" />
+                          <field name="x_ship_date" string="Ship Date" />
+
+                        </group>
+
+                          <group string="Project Phase Fields">
+                            <field name="x_duration" string="Duration (Months)" />
+                            <field name="x_design_phase_schedule" string="Design Phase Schedule" />
+                            <field name="x_design_phase_current" string="Design Phase Current" />
+                            <field name="x_dvr_schedule" string="DV Schedule" />
+                            <field name="x_dvr_current" string="DV Current" />
+                            <field name="x_pp_schedule" string="PP Schedule" />
+                            <field name="x_pp_current" string="PP Current" />
+                            <field name="x_stage" invisible='1' />
+                            <field name="x_mp_schedule" string="MP Schedule" attrs="{'required':[('x_stage','in',('DV1','DV2','DV3','ES1','ES2','PP1','PP2','MP1','MP2','CE','MP'))]}"/>
+                            <field name="x_mp_current" string="MP Current" attrs="{'required':[('x_stage','in',('DV1','DV2','DV3','ES1','ES2','PP1','PP2','MP1','MP2','CE','MP'))]}"/>
+                           
+                        </group>
+                    </group>
+                        </page>
+                         
+                    
+                         <page string="Loads" >
+                            <group string="Estimate Project Loads">
+                                <group>
+                                <field name="x_lead_swe_load" string="Lead Software Engineer Load" />
+				<field name="x_lead_ee_load" string="Lead EE Load" />
+				 <field name="x_swe_load" string="Software Engineer Load" />
+				<field name="x_ee_load" string="EE Load" />
+				<field name="x_ee_tech_load" string="EE Technician Load" />
+				<field name="x_lead_se_load" string="LSE Load" />
+				<field name="x_se_load" string="SE Load" />
+				<field name="x_lead_system_me_load" string="Lead System ME Load" />
+				<field name="x_system_me_load" string="System ME Load" />
+				<field name="x_lead_technical_engineer_load" string="Lead TE Load" />
+				<field name="x_technical_engineer_load" string="TE Load" />
+				<field name="x_pjm_load" string="PJM Load" />
+                                </group>
+                                <group>
+                                    <field name="x_lead_swe_test_load" string="Lead Software Test Load" />
+                                    <field name="x_swe_test_load" string="Software Test Load" />
+                                    <field name="x_te_me_load" string="TE ME Load" />
+                                    <field name="x_ppo_load" string="PPO Load" />
+                                    <field name="x_ppe_load" string="PPE Load" />
+                                    <field name="x_lead_pt_load" string="Lead PT Load" />
+                                    <field name="x_pt_load" string="PT Load" />
+                                    <field name="x_qe_load" string="QE Load" />
+                                </group>
+                            </group>
+                        </page>
+
+                        <page string="Pricing" >
+                            <group >
+                                <group string="Pricing Information">
+                                      
+                                    <field name="x_quote_status" string="Quote Status" />
+                                    <field name="x_sales_feedback" string="Sales Feedback" />
+                                    <field name="x_quantity" string="Annual Quantity" />
+                                    <field name="x_target_price" string="Target Price" />
+                                    <field name="x_revenue" string="Revenue" />
+                                    <field name="x_project_winning_percentage" string="Winning Percentage" />
+                                    <field name="x_cancel_reason" string="Cancel Reason" />
+                                    <field name="x_lost_reason" string="Lost Reason" />
+                                    <field name="x_remark" string="Remarks" />
+                                </group>
+                                <group string="Pricing Dates">
+                                    <field name="x_rfq_receive_date" string="RFQ Receive Date" />
+                                    <field name="x_cr_approved_date" string="CR Approval Date" />
+                                    
+                                    <!--<field name="x_cancel_date" string="Cancel Date" />
+                                   --> <field name="x_lost_date" string="Cancel/ Lost Date" />
+                                    <field name="x_on_hold_date" string="On Hold Date" />
+                                </group>
+                            </group>
+                        </page>
+
+                        <page string="Team" name="team">
+                            <group string="Team Members">
+                                <field colspan="4" name="members" widget="many2many_kanban">
+                                    <kanban quick_create="false" create="true" delete="true">
+                                        <field name="name"/>
+                                        <templates>
+                                            <t t-name="kanban-box">
+                                                <div style="position: relative">
+                                                    <a t-if="! read_only_mode" type="delete" style="position: absolute; right: 0; padding: 4px; diplay: inline-block">X</a>
+                                                    <div class="oe_module_vignette">
+                                                        <div class="oe_module_desc">
+                                                            <field name="name"/>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </t>
+                                        </templates>
+                                    </kanban>
+                                </field>
+                            </group>
+                        </page>
+
+                        <page string="PM" name="PM">
+                            
+
+                            <group string="Kickoff">
+                            </group>
+                            <group string="Design">
+                                 <group >
+                                <field name="x_kickoff_201" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('x_stage', '=', 'Design')]}"/>
+                                 <field name="x_kickoff_201_dev"/>
+                                 <field name="x_kickoff_201_reason" />
+                                </group>
+                                 <group >
+                                 <field name="x_kickoff_203" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('x_stage', '=', 'Design')]}"/>
+                                <field name="x_kickoff_203_dev"/>
+                                 <field name="x_kickoff_203_reason" />
+                                 </group>
+
+                            </group>
+                            <group string="ES" >
+
+                                 <group >
+                                <field name="x_kickoff_305" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('milestone', '=', 'Design')]}"/>
+                                <field name="x_kickoff_305_dev"/>
+                                <field name="x_kickoff_305_reason" />
+                                </group>
+
+                                <group >
+                                <field name="x_kickoff_307" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('milestone', '=', 'Design')]}"/>
+                                <field name="x_kickoff_307_dev"/>
+                                <field name="x_kickoff_307_reason" />
+                            </group>
+
+                            </group>
+                            <group string="DV">
+                                 <group >
+                                <field name="x_kickoff_411" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_411_dev"/>
+                                <field name="x_kickoff_411_reason" />
+                            </group>
+                             <group >
+                                <field name="x_kickoff_413" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_413_dev"/>
+                                <field name="x_kickoff_413_reason" />
+                            </group>
+                             <group >
+                                <field name="x_kickoff_417" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_417_dev"/>
+                                <field name="x_kickoff_417_reason" />
+                            </group>
+
+                            </group>
+                            <group string="PP" >
+                                 <group >
+                                <field name="x_kickoff_513" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_513_dev"/>
+                                <field name="x_kickoff_513_reason" />
+                                 </group>
+                                  <group >
+                                <field name="x_kickoff_514" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_514_dev"/>
+                                <field name="x_kickoff_514_reason" />
+                            </group>
+                             <group >
+                                <field name="x_kickoff_515" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_515_dev"/>
+                                <field name="x_kickoff_515_reason" />
+                                 </group>
+                            </group>
+                            <group string="MP" >
+                                 <group >
+                                <field name="x_kickoff_601"/>
+                                <field name="x_kickoff_601_dev"/>
+                                <field name="x_kickoff_601_reason" />
+                            </group>
+                             <group >
+                                <field name="x_kickoff_602"/>
+                                <field name="x_kickoff_602_dev"/>
+                                <field name="x_kickoff_602_reason" />
+                            </group>
+                            </group>
+                        </page>
+
+                        <page string="TPL" name="TPL">
+                            <group string="Kickoff">
+                                <group >
+                                <field name="x_kickoff_102" attrs="{'required':['|',('project_status', '=', 'Award'),('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_102_dev" />
+                                <field name="x_kickoff_102_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_103" attrs="{'required':['|',('project_status', '=', 'Award'),('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_103_dev"/>
+                                <field name="x_kickoff_103_reason" />
+                                 </group>
+                                <group>
+                                <field name="x_kickoff_105" attrs="{'required':['|',('project_status', '=', 'Award'),('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_105_dev"/>
+                                <field name="x_kickoff_105_reason" />
+                                 </group>
+                           
+                            </group>
+
+
+                            <group string="Design">
+                                <group>
+                                <field name="x_kickoff_202" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('x_stage', '=', 'Design')]}"/>
+                                <field name="x_kickoff_202_dev"/>
+                                <field name="x_kickoff_202_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_205" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('x_stage', '=', 'Design')]}"/>
+                                <field name="x_kickoff_205_dev"/>
+                                <field name="x_kickoff_205_reason" />
+                            </group>
+                            </group>
+                            <group string="ES">
+                            </group>
+                            <group string="DV">
+                                <group>
+                                <field name="x_kickoff_410" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_410_dev"/>
+                                <field name="x_kickoff_410_reason" />
+                            </group>
+                            <group>
+                            </group>
+                            </group>
+                            <group string="PP">
+                            </group>
+                            <group string="MP"> 
+                            </group>
+                        </page>
+
+                        <page string="Engineering" name="Engineering">
+                            <group>
+                            <group string="Kickoff" >
+                                <field name="x_kickoff_101" attrs="{'required':['|',('project_status', '=', 'Award'),('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_101_dev"/>
+                                <field name="x_kickoff_101_reason" />
+                            </group>
+                            <group>
+                            </group>
+                            </group>
+                            <group string="Design" >
+                                <group>
+                                <field name="x_kickoff_206" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('x_stage', '=', 'Design')]}"/>
+                                <field name="x_kickoff_206_dev"/>
+                                <field name="x_kickoff_206_reason" />
+                            </group>
+                                <group>
+                                <field name="x_kickoff_207" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('x_stage', '=', 'Design')]}"/>
+                                <field name="x_kickoff_207_dev"/>
+                                <field name="x_kickoff_207_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_208" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('x_stage', '=', 'Design')]}"/>
+                                <field name="x_kickoff_208_dev"/>
+                                <field name="x_kickoff_208_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_209" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('x_stage', '=', 'Design')]}"/>
+                                <field name="x_kickoff_209_dev"/>
+                                <field name="x_kickoff_209_reason" />
+                            </group>
+                            </group>
+                            <group string="ES" >
+                                <group>
+                                <field name="x_kickoff_302" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('milestone', '=', 'Design')]}"/>
+                                <field name="x_kickoff_302_dev"/>
+                                <field name="x_kickoff_302_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_303" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('milestone', '=', 'Design')]}"/>
+                                <field name="x_kickoff_303_dev"/>
+                                <field name="x_kickoff_303_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_304" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('milestone', '=', 'Design')]}"/>
+                                <field name="x_kickoff_304_dev"/>
+                                <field name="x_kickoff_304_reason" />
+                            </group>
+                            </group>
+                            <group string="DV" >
+                                <group>
+                                <field name="x_kickoff_407" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_407_dev"/>
+                                <field name="x_kickoff_407_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_412" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_412_dev"/>
+                                <field name="x_kickoff_412_reason" />
+                            </group>
+                            </group>
+                            <group string="PP" >
+                                <group>
+                                <field name="x_kickoff_503" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_503_dev"/>
+                                <field name="x_kickoff_503_reason" /> 
+                            </group>
+                            <group>
+                                <field name="x_kickoff_504" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_504_dev"/>
+                                <field name="x_kickoff_504_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_507" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_507_dev"/>
+                                <field name="x_kickoff_507_reason" />
+                                </group>                         
+                            </group>
+                            <group string="MP"> 
+                            </group>
+                        </page>
+
+                        <page string="Procurement" name="Procurement">
+                            <group string="Kickoff">
+                            </group>
+                            <group string="Design" >
+                                <group>
+                                <field name="x_kickoff_211" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('x_stage', '=', 'Design')]}"/>
+                                <field name="x_kickoff_211_dev"/>
+                                <field name="x_kickoff_211_reason" />
+                            </group>
+                            <group>
+                            </group>
+                            </group>
+                            <group string="ES" >
+                                <group>
+                                <field name="x_kickoff_308" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('milestone', '=', 'Design')]}"/>
+                                <field name="x_kickoff_308_dev"/>
+                                <field name="x_kickoff_308_reason" />
+                            </group>
+                            <group>
+                            </group>
+                            </group>
+                            <group string="DV" >
+                                <group>
+                                <field name="x_kickoff_415" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_415_dev"/>
+                                <field name="x_kickoff_415_reason" />
+                            </group>
+                            <group>
+                            </group>
+                            </group>
+                            <group string="PP" >
+                                <group>
+                                <field name="x_kickoff_506" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_506_dev"/>
+                                <field name="x_kickoff_506_reason" />
+                            </group>
+                            <group>
+                            </group>
+                            </group>
+                            <group string="MP"> 
+                            </group>
+                        </page>
+
+                        <page string="Quality" name="Quality">
+                            <group string="Kickoff">
+                            </group>
+                            <group string="Design" >
+                                <group>
+                                <field name="x_kickoff_204" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('x_stage', '=', 'Design')]}"/>
+                                <field name="x_kickoff_204_dev"/>
+                                <field name="x_kickoff_204_reason" />
+                            </group>
+                            <group>
+                            </group>
+                            </group>
+                            <group string="ES" >
+                                <group>
+                                <field name="x_kickoff_306" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('milestone', '=', 'Design')]}"/>
+                                <field name="x_kickoff_306_dev"/>
+                                <field name="x_kickoff_306_reason" />
+                            </group>
+                            <group>
+                            </group>
+                            </group>
+                            <group string="DV" >
+                                <group>
+                                <field name="x_kickoff_401" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_401_dev"/>
+                                <field name="x_kickoff_401_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_402" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_402_dev"/>
+                                <field name="x_kickoff_402_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_408" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_408_dev"/>
+                                <field name="x_kickoff_408_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_409" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_409_dev"/>
+                                <field name="x_kickoff_409_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_414" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_414_dev"/>
+                                <field name="x_kickoff_414_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_416" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_416_dev"/>
+                                <field name="x_kickoff_416_reason" />
+                            </group>
+
+                            </group>
+                            <group string="PP" >
+                                <group>
+                                <field name="x_kickoff_505" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_505_dev"/>
+                                <field name="x_kickoff_505_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_508" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_508_dev"/>
+                                <field name="x_kickoff_508_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_510" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_510_dev"/>
+                                <field name="x_kickoff_510_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_511" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_511_dev"/>
+                                <field name="x_kickoff_511_reason" />
+                            </group>
+                            </group>
+                            <group string="MP"> 
+                            </group>
+                        </page>
+
+                        <page string="Production" name="Production">
+                            <group string="Kickoff">
+                            </group>
+                            <group string="Design" >
+                                <group>
+                                <field name="x_kickoff_210" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('x_stage', '=', 'Design')]}"/>
+                                <field name="x_kickoff_210_dev"/>
+                                <field name="x_kickoff_210_reason" />
+                            </group>
+                            <group>
+                            </group>
+                            </group>
+                            <group string="ES" >
+                                <group>
+                                <field name="x_kickoff_301" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!',('milestone', '=', 'Design')]}"/>
+                                <field name="x_kickoff_301_dev"/>
+                                <field name="x_kickoff_301_reason" />
+                            </group>
+                            <group>
+                            </group>
+                            </group>
+                            <group string="DV" >
+                                <group>
+                                <field name="x_kickoff_403" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_403_dev"/>
+                                <field name="x_kickoff_403_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_404" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_404_dev"/>
+                                <field name="x_kickoff_404_reason" />
+                            </group>
+                            <group>
+                              <field name="x_kickoff_405" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_405_dev"/>
+                                <field name="x_kickoff_405_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_406" attrs="{'required':['&amp;', '|',('project_status', '=', 'Award'),('project_status', '=', 'Production'),'!','|',('milestone', '=', 'Design'),('milestone', '=', 'DV')]}"/>
+                                <field name="x_kickoff_406_dev"/>
+                                <field name="x_kickoff_406_reason" />
+                            </group>
+
+                            </group>
+                            <group string="PP" >
+                                <group>
+                                <field name="x_kickoff_502" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_502_dev"/>
+                                <field name="x_kickoff_502_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_509" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_509_dev"/>
+                                <field name="x_kickoff_509_reason" />
+                            </group>
+                            <group>
+                                <field name="x_kickoff_512" attrs="{'required':[('project_status', '=', 'Production')]}"/>
+                                <field name="x_kickoff_512_dev"/>
+                                <field name="x_kickoff_512_reason" />
+                            </group>
+                            </group>
+                            <group string="MP"> 
+                            </group>
+                        </page>
+                       
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids" widget="mail_followers" help="Follow this project to automatically track the events associated to tasks and issues of this project." groups="base.group_user"/>
+                    <field name="message_ids" widget="mail_thread"/>
+                </div>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_project_project_filter" model="ir.ui.view">
+            <field name="name">project.project.select</field>
+            <field name="model">project.project</field>
+            <field name="arch" type="xml">
+                <search string="Search Project">
+                    <field name="name" string="Project Name"/>
+                    <filter icon="terp-mail-message-new" string="Unread Messages" name="message_unread" domain="[('message_unread','=',True)]"/>
+                    <separator/>
+                    <filter icon="terp-check" string="Open" name="Current" domain="[('state', '=','open')]" help="Open Projects"/>
+                    <filter icon="gtk-media-pause" string="Pending" name="Pending" domain="[('state', '=','pending')]" help="Pending Projects"/>
+                    <filter icon="gtk-media-pause" string="Template" name="Template" domain="[('state', '=','template')]" help="Templates of Projects"/>
+                    <separator/>
+                    <filter icon="terp-personal+" string="Member" domain="['|',('user_id', '=', uid),('members', '=', uid)]" help="Projects in which I am a member."/>
+                    <separator/>
+                    <filter string="Project(s) Manager" domain="[('user_id','=',uid)]" help="Projects in which I am a manager" icon="terp-personal"/>
+                    <field name="user_id" string="Project Manager"/>
+                    <field name="partner_id" string="Contact" filter_domain="[('partner_id', 'child_of', self)]"/>
+                    <group expand="0" string="Group By...">
+                        <filter string="Manager" name="Manager" icon="terp-personal" domain="[]" context="{'group_by':'user_id'}"/>
+                        <filter string="Contact" name="Partner" icon="terp-partner" domain="[]" context="{'group_by':'partner_id'}"/>
+                        <filter string="Parent" name="Parent" help="Parent" icon="terp-folder-blue" domain = "[]" context="{'group_by':'parent_id'}"/>
+                    </group>
+                </search>
+            </field>
+        </record>
+
+        <record id="view_project" model="ir.ui.view">
+            <field name="name">project.project.tree</field>
+            <field name="model">project.project</field>
+            <field name="field_parent">child_ids</field>
+            <field name="arch" type="xml">
+                <tree fonts="bold:message_unread==True" colors="red:date and (date&lt;current_date) and (state == 'open');blue:state in ('draft','pending');grey: state in ('close','cancelled')" string="Projects">
+                    <field name="sequence" widget="handle"/>
+                    <field name="message_unread" invisible="1"/>
+                    <field name="date" invisible="1"/>
+		    <field name="x_type" string="Type" />
+		    <field name="name" string="Project Name"/>
+		    <field name="partner_id" string="Customer"/>
+		    <field name="x_project_number" string="Project Number" />
+		    <field name="user_id"/>
+		    <field name="po_id" />
+		    <field name="project_status" />
+		    <field name="phase" />
+		    <field name="milestone" />
+		    <field name="stage" />
+
+                    <field name="x_expected_award_date" string="Expected Award Date" />
+			<field name="state" invisible="1"/>
+                </tree>
+            </field>
+        </record>
+
+        <record model="ir.ui.view" id="view_project_kanban">
+            <field name="name">project.project.kanban</field>
+            <field name="model">project.project</field>
+            <field name="arch" type="xml">
+                <kanban version="7.0" class="oe_background_grey">
+                    <field name="effective_hours"/>
+                    <field name="planned_hours"/>
+                    <field name="name"/>
+                    <field name="members"/>
+                    <field name="use_tasks"/>
+                    <field name="user_id"/>
+                    <field name="date"/>
+                    <field name="color"/>
+                    <field name="task_count"/>
+                    <field name="alias_id"/>
+                    <field name="alias_domain"/>
+                    <field name="doc_count"/>
+                    <templates>
+                        <t t-name="kanban-box">
+                            <div t-attf-class="oe_kanban_color_#{kanban_getcolor(record.color.raw_value)} oe_kanban_card oe_kanban_project oe_kanban_global_click">
+                                <div class="oe_dropdown_toggle oe_dropdown_kanban" groups="base.group_user">
+                                    <span class="oe_e">í</span>
+                                    <ul class="oe_dropdown_menu">
+                                        <t t-if="widget.view.is_action_enabled('edit')"><li><a type="edit">Project Settings</a></li></t>
+                                        <t t-if="widget.view.is_action_enabled('delete')"><li><a type="delete">Delete</a></li></t>
+                                        <li><ul class="oe_kanban_colorpicker" data-field="color"/></li>
+                                    </ul>
+                                </div>
+                                <div class="oe_kanban_content">
+
+                                    <h4><field name="name"/></h4>
+                                    <div class="oe_kanban_project_list">
+                                        <a t-if="record.use_tasks.raw_value" name="%(act_project_project_2_project_task_all)d" type="action" style="margin-right: 10px"> 
+                                            <span t-if="record.task_count.raw_value gt 1"><field name="task_count"/> Tasks</span>
+                                            <span t-if="record.task_count.raw_value lt 2"><field name="task_count"/> Task</span>
+                                        </a>
+                                    </div>
+                                    <div class="oe_kanban_project_list">
+                                        <a t-if="record.doc_count.raw_value" name="attachment_tree_view" type="object" style="margin-right: 10px"> <field name="doc_count"/> Documents</a>
+                                    </div>
+                                    <div class="oe_kanban_footer_left">
+                                        <span groups="project.group_time_work_estimation_tasks">
+                                            <span class="oe_e">R</span>
+                                            <t t-esc="Math.round(record.effective_hours.raw_value)"/>/<t t-esc="Math.round(record.planned_hours.raw_value)"/> <field name="company_uom_id"/>
+                                        </span>
+                                        <span t-if="record.date.raw_value">
+                                            <span class="oe_e">N</span>
+                                            <field name="date"/>
+                                        </span>
+                                    </div>
+                                    <div class="oe_kanban_project_avatars">
+                                        <t t-foreach="record.members.raw_value.slice(0,11)" t-as="member">
+                                            <img t-att-src="kanban_image('res.users', 'image_small', member)" t-att-data-member_id="member"/>
+                                        </t>
+                                    </div>
+                                </div>
+                            </div>
+                        </t>
+                    </templates>
+                </kanban>
+            </field>
+        </record>
+
+       <record id="view_project_project_gantt" model="ir.ui.view">
+            <field name="name">project.project.gantt</field>
+            <field name="model">project.project</field>
+            <field name="arch" type="xml">
+                <gantt date_delay="planned_hours" date_start="date_start" string="Projects">
+                </gantt>
+            </field>
+        </record>
+
+        <record id="open_view_project_all" model="ir.actions.act_window">
+            <field name="name">Projects</field>
+            <field name="res_model">project.project</field>
+            <field name="view_type">form</field>
+            <field name="domain">[]</field>
+            <field name="view_mode">tree,form,gantt</field>
+            <field name="view_id" ref="view_project_kanban"/>
+            <field name="search_view_id" ref="view_project_project_filter"/>
+            <field name="context">{'search_default_Current': 1}</field>
+            <field name="help" type="html">
+                <p class="oe_view_nocontent_create">
+                  Click to start a new project.
+                </p><p>
+                  Projects are used to organize your activities; plan
+                  tasks, track issues, invoice timesheets. You can define
+                  internal projects (R&amp;D, Improve Sales Process),
+                  private projects (My Todos) or customer ones.
+                </p><p>
+                  You will be able collaborate with internal users on
+                  projects or invite customers to share your activities.
+                </p>
+            </field>
+        </record>
+
+        <record id="open_view_template_project" model="ir.actions.act_window">
+            <field name="name">Templates of Projects</field>
+            <field name="res_model">project.project</field>
+            <field name="view_type">form</field>
+            <field name="domain">[('state','=','template')]</field>
+            <field name="view_id" ref="view_project"/>
+        </record>
+
+        <record id="view_task_work_form" model="ir.ui.view">
+            <field name="name">project.task.work.form</field>
+            <field name="model">project.task.work</field>
+            <field name="arch" type="xml">
+                <form string="Task Work" version="7.0">
+                    <group col="4">
+                        <field colspan="4" name="name"/>
+                        <field name="hours" widget="float_time"/>
+                        <field name="date"/>
+                        <field name="user_id" options='{"no_open": True}'/>
+                        <field name="company_id" groups="base.group_multi_company" widget="selection"/>
+                    </group>
+                </form>
+            </field>
+        </record>
+
+        <record id="view_task_work_tree" model="ir.ui.view">
+            <field name="name">project.task.work.tree</field>
+            <field name="model">project.task.work</field>
+            <field name="arch" type="xml">
+                <tree editable="top" string="Task Work">
+                    <field name="date"/>
+                    <field name="name"/>
+                    <field name="hours" widget="float_time"/>
+                    <field name="user_id"/>
+                </tree>
+            </field>
+        </record>
+
+        <!-- Task -->
+
+        <record id="view_task_form2" model="ir.ui.view">
+            <field name="name">project.task.form</field>
+            <field name="model">project.task</field>
+            <field eval="2" name="priority"/>
+            <field name="arch" type="xml">
+                <form string="Project" version="7.0">
+                    <header>
+                        <field name="stage_id" widget="statusbar" clickable="True"/>
+                    </header>
+                    <sheet string="Task">
+                    <h1>
+                        <field name="name" placeholder="Task summary..."/>
+                    </h1>
+                    <group>
+                        <group col="4">
+                         <field name="partner_id"/>
+
+                         <field name="project_id" domain="[('state', '!=', 'close')]" on_change="onchange_project(project_id)" />
+                              <field name="user_id"  options='{"no_open": True}'/>
+				<field name="x_ppe_person" />
+                             
+
+                            <field name="x_rfq_receive_date" />
+                            <field name="x_study_meeting" />
+                            <field name="x_introduction_meeting_date" />
+                            <field name="x_information_preparation_date" />
+				    <field name="x_quote_sent_to_customer" />
+                        
+                        <field name="x_issue" />
+                        <field name="x_quotation_stage" />
+                        <field name="x_department" />
+                        <field name="x_sales_person" />
+                        <field name="x_estimate_response_date" /> 
+                        <field name="x_begin_wait_for_sales"/>
+			</group>
+	      	</group> 
+                    
+                    <notebook>
+                        <page string="Description">
+                            <field name="work_ids" groups="project.group_tasks_work_on_tasks">
+                                <tree string="Task Work" editable="top">
+                                    <field name="name"/>
+                                    <field name="hours" widget="float_time" sum="Spent Hours"/>
+                                    <field name="date"/>
+                                    <field name="user_id"/>
+                                </tree>
+                            </field>
+                            <group>
+                             <group class="oe_subtotal_footer oe_right" name="project_hours" groups="project.group_time_work_estimation_tasks">
+                                <field name="effective_hours" widget="float_time"/>
+                                <label for="remaining_hours" string="Remaining" groups="project.group_time_work_estimation_tasks"/>
+                                <div>
+                                    <field name="remaining_hours" widget="float_time"  groups="project.group_time_work_estimation_tasks"/>
+                                </div>
+                                <field name="total_hours" widget="float_time" class="oe_subtotal_footer_separator"/>
+                             </group>
+                            </group>
+                            <div class="oe_clear"/>
+                        </page>
+                        <page string="Delegation" groups="project.group_delegate_task">
+                            <button name="%(action_project_task_delegate)d" string="Delegate" type="action"
+                                    states="pending,open,draft" groups="project.group_delegate_task"/>
+                            <separator string="Parent Tasks"/>
+                            <field name="parent_ids"/>
+                            <separator string="Delegated tasks"/>
+                            <field name="child_ids">
+                                <tree string="Delegated tasks">
+                                    <field name="name"/>
+                                    <field name="user_id"/>
+                                    <field name="stage_id"/>
+                                    <field name="state" invisible="1"/>
+                                    <field name="effective_hours" widget="float_time"/>
+                                    <field name="progress" widget="progressbar"/>
+                                    <field name="remaining_hours" widget="float_time"/>
+                                    <field name="date_deadline"/>
+                                </tree>
+                            </field>
+                        </page>
+
+			<page string="Pricing Dates">
+                             <group col="6">
+                               
+                                
+                                <field name="x_expected_me_bom_release" />
+                                <field name="x_actual_me_bom_release" />
+                                <field name="x_me_difference" />
+                               
+                                <field name="x_expected_te_bom_release" />
+                                <field name="x_actual_te_bom_release" />
+                                <field name="x_te_difference" />
+                               
+                                <field name="x_expected_se_bom_release" />
+                                <field name="x_actual_se_bom_release" />
+                                <field name="x_se_difference" />
+                                
+                                <field name="x_expected_ee_bom_release" />
+                                <field name="x_actual_ee_bom_release" />
+                                <field name="x_ee_difference" />
+                                
+                                <field name="x_expected_bbom_review" />
+                                <field name="x_actual_bbom_review" />
+                                <field name="x_b_difference" />
+                                
+                                <field name="x_expected_cbom_release" />
+                                <field name="x_actual_cbom_release" />
+                                <field name="x_c_difference" />
+                                
+                                <field name="x_expected_ebom_review" />
+                                <field name="x_actual_ebom_review" />
+                                <field name="x_e_difference" />
+
+                                <field name="x_expected_vbom_release" />
+                                <field name="x_actual_vbom_release" />
+                                <field name="x_v_difference" />
+                               
+                                <field name="x_expected_sales_feedback" />
+                                <field name="x_actual_sales_feedback" />
+                                <field name="x_sales_difference" />
+                                
+                            </group>
+                        </page>
+
+                        <page string="Pricing Info">
+                            <group col="4">
+                                <field name="x_vbom_version" />
+                                <field name="x_final_price" />
+                                <field name="x_eng_cost_act" />
+                                <field name="x_eng_cost_cust" />
+                                <field name="x_ROE" />
+
+                            </group>
+                        </page>
+			<page string="Quote Status">
+			    <group col="4">
+                                <field name="x_quote_status"/>
+                            </group>
+                        </page>
+                        <page string="Sales Status">
+                        	<group col="4">
+                                	<field name="x_sales_status"/>
+                            	</group>
+                        </page>
+
+
+                    </notebook>
+                </sheet>
+                <div class="oe_chatter">
+                    <field name="message_follower_ids" widget="mail_followers" groups="base.group_user"/>
+                    <field name="message_ids" widget="mail_thread"/>
+                </div>
+            </form>
+        </field>
+        </record>
+
+        <!-- Project Task Kanban View -->
+        <record model="ir.ui.view" id="view_task_kanban">
+            <field name="name">project.task.kanban</field>
+            <field name="model">project.task</field>
+            <field name="arch" type="xml">
+                <kanban default_group_by="stage_id" >
+                    <field name="color"/>
+                    <field name="priority"/>
+                    <field name="stage_id"/>
+                    <field name="user_id"/>
+                    <field name="user_email"/>
+                    <field name="description"/>
+                    <field name="sequence"/>
+                    <field name="state" groups="base.group_no_one"/>
+                    <field name="kanban_state"/>
+                    <field name="remaining_hours" sum="Remaining Time" groups="project.group_time_work_estimation_tasks"/>
+                    <field name="date_deadline"/>
+                    <field name="message_summary"/>
+                    <field name="categ_ids"/>
+                    <templates>
+                    <t t-name="kanban-box">
+                        <div t-attf-class="oe_kanban_color_#{kanban_getcolor(record.color.raw_value)} oe_kanban_card oe_kanban_global_click">
+                            <div class="oe_dropdown_toggle oe_dropdown_kanban" groups="base.group_user">
+                                <span class="oe_e">í</span>
+                                <ul class="oe_dropdown_menu">
+                                    <t t-if="widget.view.is_action_enabled('edit')"><li><a type="edit">Edit...</a></li></t>
+                                    <t t-if="widget.view.is_action_enabled('delete')"><li><a type="delete">Delete</a></li></t>
+                                    <li>
+                                      <ul class="oe_kanban_project_times" groups="project.group_time_work_estimation_tasks">
+                                        <li><a name="set_remaining_time_1" type="object" class="oe_kanban_button">1</a></li>
+                                        <li><a name="set_remaining_time_2" type="object" class="oe_kanban_button">2</a></li>
+                                        <li><a name="set_remaining_time_5" type="object" class="oe_kanban_button">5</a></li>
+                                        <li><a name="set_remaining_time_10" type="object" class="oe_kanban_button">10</a></li>
+                                        <li><a name="do_open" states="draft" string="Validate planned time" type="object" class="oe_kanban_button oe_kanban_button_active">!</a></li>
+                                      </ul>
+                                    </li>
+                                    <li><ul class="oe_kanban_colorpicker" data-field="color"/></li>
+                                </ul>
+                            </div>
+
+                            <div class="oe_kanban_content">
+                                <div><b><field name="name"/></b></div>
+                                <div>
+                                    <field name="project_id"/><br/>
+                                    <t t-if="record.date_deadline.raw_value and record.date_deadline.raw_value lt (new Date())" t-set="red">oe_kanban_text_red</t>
+                                    <span t-attf-class="#{red || ''}"><i><field name="date_deadline"/></i></span>
+                                </div>
+                                <div class="oe_kanban_bottom_right">
+                                    <t groups="base.group_user">
+                                        <a t-if="record.kanban_state.raw_value === 'normal'" type="object" string="In Progress" name="set_kanban_state_done" class="oe_kanban_status"> </a>
+                                        <a t-if="record.kanban_state.raw_value === 'done'" type="object" string="Ready for next stage" name="set_kanban_state_blocked" class="oe_kanban_status oe_kanban_status_green"> </a>
+                                        <a t-if="record.kanban_state.raw_value === 'blocked'" type="object" string="Blocked" name="set_kanban_state_normal" class="oe_kanban_status oe_kanban_status_red"> </a>
+                                        <a t-if="record.priority.raw_value > 0" type="object" string="Normal" name="set_high_priority" class="oe_e oe_star_off">7</a>
+                                        <a t-if="record.priority.raw_value == 0" type="object" string="Very Important" name="set_normal_priority" class="oe_e oe_star_on">7</a>
+                                    </t>
+                                    <img t-att-src="kanban_image('res.users', 'image_small', record.user_id.raw_value)" t-att-title="record.user_id.value" width="24" height="24" class="oe_kanban_avatar"/>
+                                </div>
+                                <div class="oe_kanban_footer_left">
+                                    <span groups="project.group_time_work_estimation_tasks" title="Remaining hours">
+                                        <span class="oe_e">N</span>
+                                        <t t-esc="Math.round(record.remaining_hours.raw_value)"/>
+                                    </span>
+                                </div>
+                                <div class="oe_kanban_footer_left" style="margin-top:5px;">
+                                    <t t-raw="record.message_summary.raw_value"/>
+                                    <field name="categ_ids"/>
+                                </div>
+                            </div>
+                            <div class="oe_clear"></div>
+                        </div>
+                    </t>
+                    </templates>
+                </kanban>
+            </field>
+         </record>
+
+        <record id="view_task_tree2" model="ir.ui.view">
+            <field name="name">project.task.tree</field>
+            <field name="model">project.task</field>
+            <field eval="2" name="priority"/>
+            <field name="arch" type="xml">
+                <tree fonts="bold:message_unread==True" colors="red:x_me_difference&lt;0                                                                            or x_te_difference&lt;0
+    or x_se_difference&lt;0
+    or x_ee_difference&lt;0
+    or x_b_difference&lt;0
+    or x_c_difference&lt;0
+    or x_e_difference&lt;0
+    or x_v_difference&lt;0
+    or x_sales_difference&lt;0; 
+                                                                                    orange: x_me_difference&lt;2
+    or x_te_difference&lt;2
+    or x_se_difference&lt;2
+    or x_ee_difference&lt;2
+    or x_b_difference&lt;2
+    or x_c_difference&lt;2
+    or x_e_difference&lt;2
+    or x_v_difference&lt;2
+    or x_sales_difference&lt;2" 
+editable="top" string="Tasks">    
+		<field name="message_unread" invisible="1"/>
+                    <field name="sequence" invisible="not context.get('seq_visible', False)"/>
+                    <field name="name"/>
+                    <field name="project_id" icon="gtk-indent" invisible="context.get('user_invisible', False)"/>
+                    <field name="user_id" invisible="context.get('user_invisible', False)"/>
+                    <field name="delegated_user_id" invisible="context.get('show_delegated', True)"/>
+                    <field name="total_hours" invisible="1"/>
+                    <field name="planned_hours" invisible="context.get('set_visible',False)" groups="project.group_time_work_estimation_tasks"/>
+                    <field name="effective_hours" widget="float_time" sum="Spent Hours" invisible="1"/>
+                    <field name="remaining_hours" widget="float_time" sum="Remaining Hours" on_change="onchange_remaining(remaining_hours,planned_hours)" invisible="context.get('set_visible',False)" groups="project.group_time_work_estimation_tasks"/>
+                    <field name="date_deadline" invisible="context.get('deadline_visible',True)"/>
+                    <field name="stage_id" invisible="context.get('set_visible',False)"/>
+                    <field name="state" invisible="1"/>
+                      <field name="x_rfq_receive_date" />
+                                <field name="x_study_meeting" />
+
+                                <field name="x_introduction_meeting_date" />
+                                <field name="x_information_preparation_date" />
+					<field name="x_quote_sent_to_customer" />
+                                
+                                <field name="x_expected_me_bom_release" />
+                                <field name="x_actual_me_bom_release" />
+                                <field name="x_me_difference" />
+
+                                <field name="x_expected_te_bom_release" />
+                                <field name="x_actual_te_bom_release" />
+                                <field name="x_te_difference" />
+
+                                <field name="x_expected_se_bom_release" />
+                                <field name="x_actual_se_bom_release" />
+                                <field name="x_se_difference" />
+
+                                <field name="x_expected_ee_bom_release" />
+                                <field name="x_actual_ee_bom_release" />
+                                <field name="x_ee_difference" />
+
+                                <field name="x_expected_bbom_review" />
+                                <field name="x_actual_bbom_review" />
+                                <field name="x_b_difference" />
+
+                                <field name="x_expected_cbom_release" />
+                                <field name="x_actual_cbom_release" />
+                                <field name="x_c_difference" />
+
+                                <field name="x_expected_ebom_review" />
+                                <field name="x_actual_ebom_review" />
+                                <field name="x_e_difference" />
+
+                                <field name="x_expected_vbom_release" />
+                                <field name="x_actual_vbom_release" />
+                                <field name="x_v_difference" />
+
+                                <field name="x_expected_sales_feedback" />
+                                <field name="x_actual_sales_feedback" />
+                                <field name="x_sales_difference" />
+                                
+                              
+                    
+                </tree>
+            </field>
+        </record>
+
+        <record id="view_task_calendar" model="ir.ui.view">
+            <field name="name">project.task.calendar</field>
+            <field name="model">project.task</field>
+            <field eval="2" name="priority"/>
+            <field name="arch" type="xml">
+                <calendar color="user_id" date_start="date_deadline" string="Tasks">
+                    <field name="name"/>
+                    <field name="project_id"/>
+                </calendar>
+            </field>
+        </record>
+
+        <record id="view_task_gantt" model="ir.ui.view">
+            <field name="name">project.task.gantt</field>
+            <field name="model">project.task</field>
+            <field eval="2" name="priority"/>
+            <field name="arch" type="xml">
+                <gantt date_start="date_start" date_stop="date_end" string="Tasks" default_group_by="project_id">
+                </gantt>
+            </field>
+        </record>
+
+        <record id="view_project_task_graph" model="ir.ui.view">
+            <field name="name">project.task.graph</field>
+            <field name="model">project.task</field>
+            <field name="arch" type="xml">
+                <graph string="Project Tasks" type="bar">
+                    <field name="project_id"/>
+                    <field name="planned_hours" operator="+"/>
+                    <field name="delay_hours" operator="+"/>
+                </graph>
+            </field>
+        </record>
+
+        <record id="analytic_account_inherited_form" model="ir.ui.view">
+            <field name="name">account.analytic.account.form.inherit</field>
+            <field name="model">account.analytic.account</field>
+            <field name="inherit_id" ref="analytic.view_account_analytic_account_form"/>
+            <field eval="18" name="priority"/>
+            <field name="arch" type="xml">
+                <xpath expr='//div[@name="project"]' position='inside'>
+                    <field name="use_tasks"/>
+                    <label for="use_tasks"/>
+                </xpath>
+            </field>
+        </record>
+
+        <record id="action_view_task" model="ir.actions.act_window">
+            <field name="name">Tasks</field>
+            <field name="res_model">project.task</field>
+            <field name="view_mode">kanban,tree,form,calendar,gantt,graph</field>
+            <field name="search_view_id" ref="view_task_search_form"/>
+            <field name="help" type="html">
+              <p class="oe_view_nocontent_create">
+                Click to create a new task.
+              </p><p>
+                OpenERP's project management allows you to manage the pipeline
+                of tasks in order to get things done efficiently. You can
+                track progress, discuss on tasks, attach documents, etc.
+              </p>
+            </field>
+        </record>
+        <record id="open_view_task_list_kanban" model="ir.actions.act_window.view">
+            <field name="sequence" eval="2"/>
+            <field name="view_mode">kanban</field>
+            <field name="act_window_id" ref="action_view_task"/>
+        </record>
+        <record id="open_view_task_list_tree" model="ir.actions.act_window.view">
+            <field name="sequence" eval="0"/>
+            <field name="view_mode">tree</field>
+            <field name="act_window_id" ref="action_view_task"/>
+        </record>
+
+        <menuitem action="action_view_task" id="menu_action_view_task" parent="project.menu_project_management" sequence="5"/>
+
+        <record id="action_view_task_overpassed_draft" model="ir.actions.act_window">
+            <field name="name">Overpassed Tasks</field>
+            <field name="res_model">project.task</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">tree,form,calendar,graph,kanban</field>
+            <field name="domain">[('date_deadline','&lt;',time.strftime('%Y-%m-%d')),('state','in',('draft','pending','open'))]</field>
+            <field name="filter" eval="True"/>
+            <field name="search_view_id" ref="view_task_search_form"/>
+        </record>
+
+        <!-- Opening task when double clicking on project -->
+        <record id="dblc_proj" model="ir.actions.act_window">
+            <field name="res_model">project.task</field>
+            <field name="name">Project's tasks</field>
+            <field name="view_type">form</field>
+            <field name="view_mode">tree,form,calendar,graph,gantt,kanban</field>
+            <field name="domain">[('project_id', 'child_of', [active_id])]</field>
+            <field name="context">{'project_id':active_id, 'active_test':False}</field>
+        </record>
+
+        <record id="ir_project_task_open" model="ir.values">
+            <field eval="'tree_but_open'" name="key2"/>
+            <field eval="'project.project'" name="model"/>
+            <field name="name">View project's tasks</field>
+            <field eval="'ir.actions.act_window,'+str(dblc_proj)" name="value"/>
+        </record>
+
+        <!-- Task types -->
+        <record id="task_type_search" model="ir.ui.view">
+            <field name="name">project.task.type.search</field>
+            <field name="model">project.task.type</field>
+            <field name="arch" type="xml">
+                <search string="Tasks Stages">
+                   <field name="name" string="Tasks Stages"/>
+                   <filter icon="terp-check" string="Common" name="common" domain="[('case_default', '=', 1)]" help="Stages common to all projects"/>
+                </search>
+            </field>
+        </record>
+
+        <record id="task_type_edit" model="ir.ui.view">
+            <field name="name">project.task.type.form</field>
+            <field name="model">project.task.type</field>
+            <field name="arch" type="xml">
+                <form string="Task Stage" version="7.0">
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="case_default"/>
+                        </group>
+                        <group>
+                            <field name="state"/>
+                            <field name="sequence"/>
+                            <field name="fold"/>
+                        </group>
+                    </group>
+                    <field name="description" placeholder="Add a description..."/>
+                </form>
+            </field>
+        </record>
+
+        <record id="task_type_tree" model="ir.ui.view">
+            <field name="name">project.task.type.tree</field>
+            <field name="model">project.task.type</field>
+            <field name="arch" type="xml">
+                <tree string="Task Stage">
+                    <field name="sequence" widget="handle"/>
+                    <field name="name"/>
+                    <field name="state"/>
+                </tree>
+            </field>
+        </record>
+
+        <record id="open_task_type_form" model="ir.actions.act_window">
+            <field name="name">Stages</field>
+            <field name="res_model">project.task.type</field>
+            <field name="view_type">form</field>
+            <field name="view_id" ref="task_type_tree"/>
+            <field name="help" type="html">
+              <p class="oe_view_nocontent_create">
+                Click to add a stage in the task pipeline.
+              </p><p>
+                Define the steps that will be used in the project from the
+                creation of the task, up to the closing of the task or issue.
+                You will use these stages in order to track the progress in
+                solving a task or an issue.
+              </p>
+            </field>
+        </record>
+
+        <menuitem id="menu_tasks_config" name="GTD" parent="base.menu_definitions" sequence="1"/>
+
+        <menuitem id="base.menu_project_config_project" name="Stages" parent="base.menu_definitions" sequence="1" groups="base.group_no_one"/>
+
+        <menuitem action="open_task_type_form" name="Task Stages" id="menu_task_types_view" parent="base.menu_project_config_project" sequence="2"/>
+        <menuitem action="open_view_project_all" id="menu_projects" name="Projects" parent="menu_project_management" sequence="1"/>
+
+
+         <record id="task_company" model="ir.ui.view">
+            <field name="name">res.company.task.config</field>
+            <field name="model">res.company</field>
+            <field name="inherit_id" ref="base.view_company_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//group[@name='account_grp']" position="after">
+                    <group name="project_grp" string="Projects">
+                        <field name="project_time_mode_id" domain="[('category_id','=','Working Time')]"/>
+                    </group>
+                </xpath>
+            </field>
+        </record>
+
+        <!-- User Form -->
+        <act_window context="{'search_default_user_id': [active_id], 'default_user_id': active_id}" domain="[('state', '&lt;&gt;', 'cancelled'),('state', '&lt;&gt;', 'done')]" id="act_res_users_2_project_task_opened" name="Assigned Tasks" res_model="project.task" src_model="res.users" view_mode="tree,form,gantt,calendar,graph" view_type="form"/>
+
+        <!-- Tags -->
+        <record model="ir.ui.view" id="project_category_search_view">
+            <field name="name">Tags</field>
+            <field name="model">project.category</field>
+            <field name="arch" type="xml">
+                <search string="Issue Version">
+                    <field name="name"/>
+                </search>
+            </field>
+        </record>
+        <record model="ir.ui.view" id="project_category_form_view">
+            <field name="name">Tags</field>
+            <field name="model">project.category</field>
+            <field name="arch" type="xml">
+                <form string="Tags">
+                    <field name="name"/>
+                </form>
+            </field>
+        </record>
+        <record id="project_category_action" model="ir.actions.act_window">
+            <field name="name">Tags</field>
+            <field name="res_model">project.category</field>
+            <field name="view_type">form</field>
+            <field name="help" type="html">
+              <p class="oe_view_nocontent_create">
+                Click to add a new tag.
+              </p>
+            </field>
+        </record>
+        <menuitem action="project_category_action" id="menu_project_category_act" parent="base.menu_definitions" groups="base.group_no_one"/>
+
+    </data>
+</openerp>
